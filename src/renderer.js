@@ -98,7 +98,7 @@ function buildUI() {
                 <select id="compareSelect" class="input-field" style="max-width: 200px;">
                   <option value="">Compare with...</option>
                 </select>
-                <button id="compareBtn" class="btn btn-primary" style="display: none;">Compare</button>
+                <button id="compareBtn" class="btn btn-primary">📊 Compare</button>
                 <button id="deleteBtn" class="btn btn-danger">🗑️ Delete</button>
               </div>
             </div>
@@ -281,9 +281,7 @@ function initializeApp() {
   });
 
   compareSelect.addEventListener('change', (e) => {
-    console.log('compareSelect changed, value:', e.target.value);
-    compareBtn.style.display = e.target.value ? 'block' : 'none';
-    console.log('compareBtn display set to:', compareBtn.style.display);
+    // Button is always visible - no hide/show logic needed
   });
 
   console.log('Event listeners attached');
@@ -328,8 +326,6 @@ function renderSnapshotList() {
     }
   });
   
-  // Reset compare button visibility when list is updated
-  compareBtn.style.display = 'none';
   compareSelect.value = '';
 }
 
@@ -341,6 +337,10 @@ async function loadSnapshot(name) {
       currentSnapshot = name;
       displaySnapshot(data);
       renderSnapshotList();
+      
+      // Reset the compare dropdown and hide button when loading new snapshot
+      compareSelect.value = '';
+      compareSelect.focus(); // Auto-focus dropdown
     }
   } catch (e) {
     console.error('Error loading snapshot:', e);
@@ -350,7 +350,7 @@ async function loadSnapshot(name) {
 // Display snapshot data in main view
 function displaySnapshot(data) {
   emptyState.style.display = 'none';
-  snapshotDetail.style.display = 'block';
+  snapshotDetail.style.display = 'flex';
   comparisonView.style.display = 'none';
 
   detailTitle.textContent = currentSnapshot;
@@ -485,7 +485,7 @@ async function deleteSnapshot(name) {
       if (success) {
         currentSnapshot = null;
         await loadSnapshotList();
-        emptyState.style.display = 'block';
+        emptyState.style.display = 'flex';
         snapshotDetail.style.display = 'none';
       }
     } catch (e) {

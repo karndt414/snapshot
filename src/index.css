@@ -101,14 +101,19 @@ header .subtitle {
   flex: 1;
   overflow-y: auto;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: flex-start;
 }
 
 .empty-state {
   text-align: center;
   color: #999;
   font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  width: 100%;
 }
 
 .snapshot-detail {
@@ -116,6 +121,8 @@ header .subtitle {
   padding: 30px;
   overflow-y: auto;
   width: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .detail-header {
@@ -335,6 +342,12 @@ section h3 {
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.header-buttons .btn-primary {
+  width: auto;
+  min-width: 120px;
 }
 
 .comparison-view {
