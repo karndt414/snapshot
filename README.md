@@ -122,7 +122,3 @@ Snapshots are stored as signed JSON files:
 ```
 
 ---
-
-## License
-
-MIT © [karndt414](https://github.com/karndt414)
