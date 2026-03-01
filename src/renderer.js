@@ -197,30 +197,15 @@ function buildUI() {
     </div>
   `;
   
-  if (document.body.children.length === 0) {
-    console.log('Injecting UI into empty body...');
-    document.body.innerHTML = htmlString;
-  }
+  // Always inject — ensures renderer.js is the single source of truth for the UI
+  console.log('Injecting UI...');
+  document.body.innerHTML = htmlString;
 }
 
 // Initialize when window is fully ready
 function scheduleInit() {
-  console.log('Document readyState:', document.readyState);
-  console.log('Document body children:', document.body?.children?.length || 0);
-  
-  // Build UI if needed
+  // Build UI first — renderer.js is the single source of truth
   buildUI();
-  
-  // Check if HTML has actually been loaded into the body
-  const hasContent = document.body && document.body.children && document.body.children.length > 0;
-  
-  if (!hasContent) {
-    console.log('UI still not present, waiting...');
-    // HTML hasn't been injected yet, wait and try again
-    setTimeout(scheduleInit, 100);
-    return;
-  }
-  
   console.log('UI ready, initializing app...');
   initializeApp();
 }
@@ -258,6 +243,12 @@ function initializeApp() {
     return;
   }
 
+  // Log any missing elements to help debug
+  const elements = { deleteBtn, processSearch, compareBtn, compareSelect, uploadBtn, comparisonView, integrityInfo };
+  Object.entries(elements).forEach(([name, el]) => {
+    if (!el) console.error(`ERROR: Could not find element: ${name}`);
+  });
+
   // Event Listeners
   newSnapshotBtn.addEventListener('click', () => {
     const name = snapshotNameInput.value.trim() || `snapshot_${Date.now()}`;
@@ -265,24 +256,24 @@ function initializeApp() {
     snapshotNameInput.value = '';
   });
 
-  deleteBtn.addEventListener('click', () => {
+  if (deleteBtn) deleteBtn.addEventListener('click', () => {
     if (currentSnapshot) {
       deleteSnapshot(currentSnapshot);
     }
   });
 
-  processSearch.addEventListener('input', (e) => {
+  if (processSearch) processSearch.addEventListener('input', (e) => {
     filterProcesses(e.target.value.toLowerCase());
   });
 
-  compareBtn.addEventListener('click', () => {
+  if (compareBtn) compareBtn.addEventListener('click', () => {
     const selectedSnapshot = compareSelect.value;
     if (selectedSnapshot) {
       performComparison(currentSnapshot, selectedSnapshot);
     }
   });
 
-  uploadBtn.addEventListener('click', async () => {
+  if (uploadBtn) uploadBtn.addEventListener('click', async () => {
     if (!currentSnapshot) return;
     uploadBtn.disabled = true;
     uploadBtn.textContent = '⏳ Uploading...';
@@ -303,7 +294,7 @@ function initializeApp() {
     }
   });
 
-  compareSelect.addEventListener('change', (e) => {
+  if (compareSelect) compareSelect.addEventListener('change', (e) => {
     // Button is always visible - no hide/show logic needed
   });
 

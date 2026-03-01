@@ -6,6 +6,9 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const https = require('https');
 const http = require('http');
 
+// Load .env file from the project root
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+
 // Helper: make an HTTP/HTTPS request (no fetch in older Node)
 function makeRequest(url, options, body) {
   return new Promise((resolve, reject) => {

@@ -13,3 +13,7 @@ create table snapshots (
 -- Index for fast queries by machine
 create index snapshots_machine_id_idx on snapshots(machine_id);
 create index snapshots_timestamp_idx on snapshots(timestamp desc);
+
+-- Disable RLS — access is controlled at the API layer via x-api-key,
+-- not at the database layer. The service role key is used server-side only.
+alter table snapshots disable row level security;
