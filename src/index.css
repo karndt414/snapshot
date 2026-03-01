@@ -282,6 +282,22 @@ section h3 {
   color: white;
 }
 
+.btn-upload {
+  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+  color: white;
+}
+
+.btn-upload:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(67, 233, 123, 0.4);
+}
+
+.btn-upload:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .btn-danger:hover {
   background: #ff5252;
   transform: translateY(-2px);

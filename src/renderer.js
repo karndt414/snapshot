@@ -49,7 +49,7 @@ let allSnapshots = [];
 // DOM Elements
 let newSnapshotBtn, snapshotNameInput, snapshotList, emptyState, snapshotDetail;
 let detailTitle, detailTimestamp, deleteBtn, processSearch, processList;
-let compareSelect, compareBtn, comparisonView, integrityInfo;
+let compareSelect, compareBtn, comparisonView, integrityInfo, uploadBtn;
 
 // Build the UI programmatically if HTML isn't present
 function buildUI() {
@@ -99,6 +99,7 @@ function buildUI() {
                   <option value="">Compare with...</option>
                 </select>
                 <button id="compareBtn" class="btn btn-primary">📊 Compare</button>
+                <button id="uploadBtn" class="btn btn-upload">☁️ Upload</button>
                 <button id="deleteBtn" class="btn btn-danger">🗑️ Delete</button>
               </div>
             </div>
@@ -245,6 +246,7 @@ function initializeApp() {
   compareBtn = document.getElementById('compareBtn');
   comparisonView = document.getElementById('comparisonView');
   integrityInfo = document.getElementById('integrityInfo');
+  uploadBtn = document.getElementById('uploadBtn');
 
   console.log('DOM elements retrieved');
   console.log('newSnapshotBtn:', !!newSnapshotBtn);
@@ -277,6 +279,27 @@ function initializeApp() {
     const selectedSnapshot = compareSelect.value;
     if (selectedSnapshot) {
       performComparison(currentSnapshot, selectedSnapshot);
+    }
+  });
+
+  uploadBtn.addEventListener('click', async () => {
+    if (!currentSnapshot) return;
+    uploadBtn.disabled = true;
+    uploadBtn.textContent = '⏳ Uploading...';
+    try {
+      const result = await ipcRenderer.invoke('upload-snapshot', currentSnapshot);
+      if (result.success) {
+        uploadBtn.textContent = '✅ Uploaded!';
+        setTimeout(() => { uploadBtn.textContent = '☁️ Upload'; uploadBtn.disabled = false; }, 2000);
+      } else {
+        alert(`Upload failed: ${result.error}`);
+        uploadBtn.textContent = '☁️ Upload';
+        uploadBtn.disabled = false;
+      }
+    } catch (e) {
+      alert(`Upload error: ${e.message}`);
+      uploadBtn.textContent = '☁️ Upload';
+      uploadBtn.disabled = false;
     }
   });
 

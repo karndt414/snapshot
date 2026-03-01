@@ -3,6 +3,26 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { app, BrowserWindow, ipcMain } = require('electron');
+const https = require('https');
+const http = require('http');
+
+// Helper: make an HTTP/HTTPS request (no fetch in older Node)
+function makeRequest(url, options, body) {
+  return new Promise((resolve, reject) => {
+    const mod = url.startsWith('https') ? https : http;
+    const req = mod.request(url, options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
+        catch { resolve({ status: res.statusCode, body: data }); }
+      });
+    });
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
 
 // 1. The Snapshot Function
 async function takeSnapshot(filename) {
@@ -264,6 +284,62 @@ ipcMain.handle('compare-snapshots', async (event, baselineName, afterName) => {
   } catch (e) {
     console.error("Error comparing snapshots:", e);
     return null;
+  }
+});
+
+ipcMain.handle('upload-snapshot', async (event, filename) => {
+  try {
+    const serverUrl = process.env.SNAPSHOT_SERVER_URL;
+    const apiKey = process.env.SNAPSHOT_API_KEY;
+    const machineId = process.env.MACHINE_ID || require('os').hostname();
+    const machineName = process.env.MACHINE_NAME || require('os').hostname();
+
+    if (!serverUrl || !apiKey) {
+      return { success: false, error: 'SNAPSHOT_SERVER_URL and SNAPSHOT_API_KEY env vars not set' };
+    }
+
+    // Load the local snapshot
+    const snapshotPath = path.join(app.getPath('userData'), `${filename}.json`);
+    const data = JSON.parse(fs.readFileSync(snapshotPath, 'utf-8'));
+
+    const body = JSON.stringify({ machine_id: machineId, machine_name: machineName, snapshot_name: filename, data });
+    const url = new URL('/api/snapshots', serverUrl);
+
+    const result = await makeRequest(url.toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'Content-Length': Buffer.byteLength(body) }
+    }, body);
+
+    if (result.status === 200) {
+      return { success: true, id: result.body.id };
+    } else {
+      return { success: false, error: result.body.error || `HTTP ${result.status}` };
+    }
+  } catch (e) {
+    console.error('Error uploading snapshot:', e);
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('list-remote-snapshots', async (event) => {
+  try {
+    const serverUrl = process.env.SNAPSHOT_SERVER_URL;
+    const apiKey = process.env.SNAPSHOT_API_KEY;
+
+    if (!serverUrl || !apiKey) return [];
+
+    const machineId = process.env.MACHINE_ID || require('os').hostname();
+    const url = new URL(`/api/snapshots?machine_id=${encodeURIComponent(machineId)}`, serverUrl);
+
+    const result = await makeRequest(url.toString(), {
+      method: 'GET',
+      headers: { 'x-api-key': apiKey }
+    }, null);
+
+    return result.status === 200 ? result.body : [];
+  } catch (e) {
+    console.error('Error listing remote snapshots:', e);
+    return [];
   }
 });
 
