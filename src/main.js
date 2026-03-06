@@ -291,26 +291,27 @@ ipcMain.handle('compare-snapshots', async (event, baselineName, afterName) => {
 });
 
 ipcMain.handle('upload-snapshot', async (event, filename) => {
-  try {
-    const serverUrl = process.env.SNAPSHOT_SERVER_URL;
-    const apiKey = process.env.SNAPSHOT_API_KEY;
-    const machineId = process.env.MACHINE_ID || require('os').hostname();
-    const machineName = process.env.MACHINE_NAME || require('os').hostname();
+  let snapshotId = null;
 
-    if (!serverUrl || !apiKey) {
-      return { success: false, error: 'SNAPSHOT_SERVER_URL and SNAPSHOT_API_KEY env vars not set' };
-    }
+  const withStatus = (baseData, status, errorMessage = null) => {
+    const safeBase = baseData && typeof baseData === 'object' ? baseData : {};
+    const baseMetadata = safeBase.metadata && typeof safeBase.metadata === 'object'
+      ? safeBase.metadata
+      : {};
 
-    // Load the local snapshot
-    const snapshotPath = path.join(app.getPath('userData'), `${filename}.json`);
-    const data = JSON.parse(fs.readFileSync(snapshotPath, 'utf-8'));
+    return {
+      ...safeBase,
+      metadata: {
+        ...baseMetadata,
+        snapshot_status: status,
+        error: errorMessage,
+        status_updated_at: new Date().toISOString(),
+      },
+    };
+  };
 
-    const body = JSON.stringify({
-      machine_id: machineId,
-      machine_name: machineName,
-      snapshot_name: filename,
-      data
-    });
+  const createSnapshotRow = async (serverUrl, apiKey, payload) => {
+    const body = JSON.stringify(payload);
     const url = new URL('/api/snapshots', serverUrl);
 
     const result = await makeRequest(url.toString(), {
@@ -322,13 +323,108 @@ ipcMain.handle('upload-snapshot', async (event, filename) => {
       }
     }, body);
 
-    if (result.status === 201 || result.status === 200) {
-      return { success: true, id: result.body?.id };
-    } else {
-      return { success: false, error: result.body?.message || result.body?.error || `HTTP ${result.status}` };
+    return result;
+  };
+
+  const updateSnapshotRow = async (serverUrl, apiKey, id, payload) => {
+    const body = JSON.stringify(payload);
+    const url = new URL(`/api/snapshots/${id}`, serverUrl);
+
+    return makeRequest(url.toString(), {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'Content-Length': Buffer.byteLength(body)
+      }
+    }, body);
+  };
+
+  try {
+    const serverUrl = process.env.SNAPSHOT_SERVER_URL;
+    const apiKey = process.env.SNAPSHOT_API_KEY;
+    const machineId = process.env.MACHINE_ID || require('os').hostname();
+    const machineName = process.env.MACHINE_NAME || require('os').hostname();
+
+    if (!serverUrl || !apiKey) {
+      return { success: false, error: 'SNAPSHOT_SERVER_URL and SNAPSHOT_API_KEY env vars not set' };
     }
+
+    const pendingPayload = {
+      machine_id: machineId,
+      machine_name: machineName,
+      snapshot_name: filename,
+      data: withStatus({
+        metadata: {
+          snapshot_name: filename,
+          timestamp: new Date().toISOString(),
+        }
+      }, 'Pending')
+    };
+
+    const pendingResult = await createSnapshotRow(serverUrl, apiKey, pendingPayload);
+    if (pendingResult.status !== 200 && pendingResult.status !== 201) {
+      return { success: false, error: pendingResult.body?.message || pendingResult.body?.error || `HTTP ${pendingResult.status}` };
+    }
+
+    snapshotId = pendingResult.body?.id;
+    if (!snapshotId) {
+      return { success: false, error: 'Upload failed: missing snapshot id from server' };
+    }
+
+    const runningResult = await updateSnapshotRow(serverUrl, apiKey, snapshotId, {
+      data: withStatus({
+        metadata: {
+          snapshot_name: filename,
+          timestamp: new Date().toISOString(),
+        }
+      }, 'Running')
+    });
+
+    if (runningResult.status !== 200) {
+      return { success: false, error: runningResult.body?.message || runningResult.body?.error || `HTTP ${runningResult.status}` };
+    }
+
+    // Load the local snapshot
+    const snapshotPath = path.join(app.getPath('userData'), `${filename}.json`);
+    const data = JSON.parse(fs.readFileSync(snapshotPath, 'utf-8'));
+
+    const completedData = withStatus(data, 'Completed');
+
+    const completedResult = await updateSnapshotRow(serverUrl, apiKey, snapshotId, {
+      machine_name: machineName,
+      snapshot_name: filename,
+      timestamp: completedData.metadata?.timestamp || new Date().toISOString(),
+      data: completedData
+    });
+
+    if (completedResult.status === 200) {
+      return { success: true, id: snapshotId };
+    }
+
+    return { success: false, error: completedResult.body?.message || completedResult.body?.error || `HTTP ${completedResult.status}` };
   } catch (e) {
     console.error('Error uploading snapshot:', e);
+
+    if (snapshotId) {
+      try {
+        const serverUrl = process.env.SNAPSHOT_SERVER_URL;
+        const apiKey = process.env.SNAPSHOT_API_KEY;
+        if (serverUrl && apiKey) {
+          await updateSnapshotRow(serverUrl, apiKey, snapshotId, {
+            data: withStatus({
+              metadata: {
+                snapshot_name: filename,
+                timestamp: new Date().toISOString(),
+              }
+            }, 'Failed', e.message || 'Unknown upload failure')
+          });
+        }
+      } catch (statusError) {
+        console.error('Error updating failed status:', statusError);
+      }
+    }
+
     return { success: false, error: e.message };
   }
 });
