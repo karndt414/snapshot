@@ -10,11 +10,9 @@ module.exports = {
     rules: require('./webpack.rules'),
   },
   plugins: [
-    new webpack.DefinePlugin({
-      'process.env.NEXT_PUBLIC_SUPABASE_URL': JSON.stringify('https://fkviyesjakytcjpwmpvg.supabase.co'),
-      'process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY': JSON.stringify('sb_publishable_iGDjvy9SDOaI04f8bdgohA_B0mPnWH3'),
-      'process.env.SNAPSHOT_SERVER_URL': JSON.stringify('https://szildajorbodyqjkddzx.supabase.co'), // Replace with your server URL
-      'process.env.SNAPSHOT_API_KEY': JSON.stringify('sb_publishable_4cRWlmo693rt6aPU8Tmqjg_ZDnfLWJV'), // Replace with your API key
-    }),
+    // systeminformation optionally requires these native macOS sensor modules.
+    // They are not needed for this app's snapshot flow, so ignore them at bundle time.
+    new webpack.IgnorePlugin({ resourceRegExp: /^osx-temperature-sensor$/ }),
+    new webpack.IgnorePlugin({ resourceRegExp: /^macos-temperature-sensor$/ }),
   ],
 };

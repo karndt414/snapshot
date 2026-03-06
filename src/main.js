@@ -305,30 +305,25 @@ ipcMain.handle('upload-snapshot', async (event, filename) => {
     const snapshotPath = path.join(app.getPath('userData'), `${filename}.json`);
     const data = JSON.parse(fs.readFileSync(snapshotPath, 'utf-8'));
 
-    const body = JSON.stringify([
-      {
-        machine_id: machineId,
-        machine_name: machineName,
-        snapshot_name: filename,
-        timestamp: data.metadata?.timestamp,
-        data
-      }
-    ]);
-    const url = new URL('/rest/v1/snapshots', serverUrl);
+    const body = JSON.stringify({
+      machine_id: machineId,
+      machine_name: machineName,
+      snapshot_name: filename,
+      data
+    });
+    const url = new URL('/api/snapshots', serverUrl);
 
     const result = await makeRequest(url.toString(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': apiKey,
-        'Authorization': `Bearer ${apiKey}`,
-        'Prefer': 'return=representation',
+        'x-api-key': apiKey,
         'Content-Length': Buffer.byteLength(body)
       }
     }, body);
 
     if (result.status === 201 || result.status === 200) {
-      return { success: true, id: result.body[0]?.id };
+      return { success: true, id: result.body?.id };
     } else {
       return { success: false, error: result.body?.message || result.body?.error || `HTTP ${result.status}` };
     }

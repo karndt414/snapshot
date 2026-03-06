@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 interface SnapshotMeta {
   id: string;
@@ -10,12 +10,48 @@ interface SnapshotMeta {
   timestamp: string;
 }
 
+type MachineType = 'Laptop' | 'Desktop' | 'Server' | 'Virtual Machine' | 'Unknown';
+type SortMode = 'recent' | 'name' | 'type';
+
+interface MachineGroup {
+  machineId: string;
+  machineName: string;
+  machineType: MachineType;
+  snapshots: SnapshotMeta[];
+  latestTimestamp: string;
+}
+
+function inferMachineType(machineName: string, machineId: string): MachineType {
+  const value = `${machineName} ${machineId}`.toLowerCase();
+  if (value.includes('server')) return 'Server';
+  if (value.includes('vm') || value.includes('virtual') || value.includes('hyper-v') || value.includes('wsl')) return 'Virtual Machine';
+  if (value.includes('macbook') || value.includes('laptop') || value.includes('notebook')) return 'Laptop';
+  if (value.includes('desktop') || value.includes('workstation') || value.includes('imac')) return 'Desktop';
+  return 'Unknown';
+}
+
+function compareMachines(a: MachineGroup, b: MachineGroup, sortMode: SortMode) {
+  if (sortMode === 'name') {
+    return a.machineName.localeCompare(b.machineName);
+  }
+
+  if (sortMode === 'type') {
+    const byType = a.machineType.localeCompare(b.machineType);
+    if (byType !== 0) return byType;
+    return b.latestTimestamp.localeCompare(a.latestTimestamp);
+  }
+
+  return b.latestTimestamp.localeCompare(a.latestTimestamp);
+}
+
 export default function Dashboard() {
   const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([]);
   const [selected, setSelected] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [sortMode, setSortMode] = useState<SortMode>('recent');
+  const [query, setQuery] = useState('');
 
   const apiKey = process.env.NEXT_PUBLIC_API_KEY || '';
 
@@ -49,8 +85,51 @@ export default function Dashboard() {
     setDeleting(false);
   }
 
-  // Group by machine
-  const machines = [...new Set(snapshots.map(s => s.machine_id))];
+  const machineGroups = useMemo<MachineGroup[]>(() => {
+    const grouped = new Map<string, SnapshotMeta[]>();
+
+    for (const snap of snapshots) {
+      const current = grouped.get(snap.machine_id) || [];
+      current.push(snap);
+      grouped.set(snap.machine_id, current);
+    }
+
+    const groups: MachineGroup[] = [];
+    grouped.forEach((machineSnapshots, machineId) => {
+      const sortedSnapshots = [...machineSnapshots].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      const machineName = sortedSnapshots[0]?.machine_name || machineId;
+
+      groups.push({
+        machineId,
+        machineName,
+        machineType: inferMachineType(machineName, machineId),
+        snapshots: sortedSnapshots,
+        latestTimestamp: sortedSnapshots[0]?.timestamp || '',
+      });
+    });
+
+    return groups;
+  }, [snapshots]);
+
+  const visibleMachines = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+
+    const filtered = machineGroups.filter(machine => {
+      if (!needle) return true;
+      const haystack = `${machine.machineName} ${machine.machineId} ${machine.machineType}`.toLowerCase();
+      return haystack.includes(needle);
+    });
+
+    return filtered.sort((a, b) => compareMachines(a, b, sortMode));
+  }, [machineGroups, query, sortMode]);
+
+  const totalMachines = machineGroups.length;
+  const machineTypeCounts = useMemo(() => {
+    return machineGroups.reduce<Record<MachineType, number>>((acc, machine) => {
+      acc[machine.machineType] += 1;
+      return acc;
+    }, { Laptop: 0, Desktop: 0, Server: 0, 'Virtual Machine': 0, Unknown: 0 });
+  }, [machineGroups]);
 
   return (
     <div className="flex h-screen bg-gray-100">
@@ -64,15 +143,39 @@ export default function Dashboard() {
         {loading && <p className="p-4 text-gray-500">Loading...</p>}
         {error && <p className="p-4 text-red-500">{error}</p>}
 
-        {machines.map(machineId => {
-          const machineSnapshots = snapshots.filter(s => s.machine_id === machineId);
-          const machineName = machineSnapshots[0]?.machine_name || machineId;
+        <div className="p-3 border-b bg-gray-50 space-y-2">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search machines..."
+            className="w-full border border-gray-300 rounded-md px-3 py-2 text-base font-medium text-gray-800 placeholder:text-gray-500 bg-white"
+          />
+          <select
+            value={sortMode}
+            onChange={(e) => setSortMode(e.target.value as SortMode)}
+            className="w-full border border-gray-300 rounded-md px-3 py-2 text-base font-medium text-gray-800 bg-white"
+          >
+            <option value="recent">Sort: Most recently updated</option>
+            <option value="name">Sort: Machine name (A-Z)</option>
+            <option value="type">Sort: Machine type</option>
+          </select>
+          <p className="text-xs text-gray-500">
+            {totalMachines} machines · {snapshots.length} snapshots
+          </p>
+        </div>
+
+        {visibleMachines.map(machine => {
           return (
-            <div key={machineId} className="border-b">
-              <div className="px-4 py-2 bg-gray-50 font-semibold text-sm text-gray-600 uppercase tracking-wide">
-                🖥️ {machineName}
+            <div key={machine.machineId} className="border-b">
+              <div className="px-4 py-2 bg-gray-50">
+                <div className="font-semibold text-sm text-gray-700 tracking-wide">
+                  🖥️ {machine.machineName}
+                </div>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  {machine.machineType} · {machine.snapshots.length} snapshots · Last update {new Date(machine.latestTimestamp).toLocaleString()}
+                </div>
               </div>
-              {machineSnapshots.map(snap => (
+              {machine.snapshots.map(snap => (
                 <div
                   key={snap.id}
                   onClick={() => loadSnapshot(snap.id)}
@@ -99,13 +202,37 @@ export default function Dashboard() {
             </div>
           );
         })}
+
+        {!loading && !error && visibleMachines.length === 0 && (
+          <p className="p-4 text-sm text-gray-500">No machines match your filters.</p>
+        )}
       </div>
 
       {/* Main content */}
       <div className="flex-1 overflow-y-auto">
         {!selected ? (
-          <div className="flex items-center justify-center h-full text-gray-400 text-lg">
-            �� Select a snapshot to view details
+          <div className="p-8">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">Organization Overview</h2>
+            <p className="text-gray-500 mb-6">Sort machines by recency, name, or type from the sidebar. Select any snapshot to inspect full details.</p>
+
+            <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+              {Object.entries(machineTypeCounts).map(([type, count]) => (
+                <div key={type} className="bg-white rounded-lg p-4 shadow-sm">
+                  <div className="text-xs text-gray-400 uppercase tracking-wide">{type}</div>
+                  <div className="text-2xl font-semibold text-gray-800 mt-1">{count}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-white rounded-lg p-5 shadow-sm">
+              <h3 className="text-lg font-semibold text-gray-700 mb-2">Feature Board</h3>
+              <ul className="text-sm text-gray-600 space-y-2 list-disc list-inside">
+                <li>Now: sorting by recency, machine name, and inferred machine type.</li>
+                <li>Next: add tags (team, environment, risk level) for richer filtering.</li>
+                <li>Next: add status badges for stale machines (for example no snapshot in 7+ days).</li>
+                <li>Next: save per-user dashboard views (favorite filters and sort mode).</li>
+              </ul>
+            </div>
           </div>
         ) : (
           <div className="p-8">
