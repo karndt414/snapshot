@@ -131,6 +131,8 @@ const sortFieldOptions: Array<{ value: SortField; label: string }> = [
   { value: 'status', label: 'Status' },
 ];
 
+const DEFAULT_PUBLIC_API_KEY = 'sb_publishable_4cRWlmo693rt6aPU8Tmqjg_ZDnfLWJV';
+
 export default function Dashboard() {
   const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([]);
   const [selected, setSelected] = useState<any>(null);
@@ -141,15 +143,9 @@ export default function Dashboard() {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [query, setQuery] = useState('');
 
-  const apiKey = process.env.NEXT_PUBLIC_API_KEY || '';
+  const apiKey = process.env.NEXT_PUBLIC_API_KEY || DEFAULT_PUBLIC_API_KEY;
 
   useEffect(() => {
-    if (!apiKey) {
-      setError('NEXT_PUBLIC_API_KEY is not configured.');
-      setLoading(false);
-      return;
-    }
-
     let isMounted = true;
 
     const loadSnapshots = () => {

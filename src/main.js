@@ -9,6 +9,9 @@ const http = require('http');
 // Load .env file from the project root
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
+const DEFAULT_SNAPSHOT_SERVER_URL = 'http://localhost:3000';
+const DEFAULT_SNAPSHOT_API_KEY = 'sb_publishable_4cRWlmo693rt6aPU8Tmqjg_ZDnfLWJV';
+
 // Helper: make an HTTP/HTTPS request (no fetch in older Node)
 function makeRequest(url, options, body) {
   return new Promise((resolve, reject) => {
@@ -341,14 +344,10 @@ ipcMain.handle('upload-snapshot', async (event, filename) => {
   };
 
   try {
-    const serverUrl = process.env.SNAPSHOT_SERVER_URL;
-    const apiKey = process.env.SNAPSHOT_API_KEY;
+    const serverUrl = process.env.SNAPSHOT_SERVER_URL || DEFAULT_SNAPSHOT_SERVER_URL;
+    const apiKey = process.env.SNAPSHOT_API_KEY || DEFAULT_SNAPSHOT_API_KEY;
     const machineId = process.env.MACHINE_ID || require('os').hostname();
     const machineName = process.env.MACHINE_NAME || require('os').hostname();
-
-    if (!serverUrl || !apiKey) {
-      return { success: false, error: 'SNAPSHOT_SERVER_URL and SNAPSHOT_API_KEY env vars not set' };
-    }
 
     const pendingPayload = {
       machine_id: machineId,
@@ -408,8 +407,8 @@ ipcMain.handle('upload-snapshot', async (event, filename) => {
 
     if (snapshotId) {
       try {
-        const serverUrl = process.env.SNAPSHOT_SERVER_URL;
-        const apiKey = process.env.SNAPSHOT_API_KEY;
+        const serverUrl = process.env.SNAPSHOT_SERVER_URL || DEFAULT_SNAPSHOT_SERVER_URL;
+        const apiKey = process.env.SNAPSHOT_API_KEY || DEFAULT_SNAPSHOT_API_KEY;
         if (serverUrl && apiKey) {
           await updateSnapshotRow(serverUrl, apiKey, snapshotId, {
             data: withStatus({
@@ -431,8 +430,8 @@ ipcMain.handle('upload-snapshot', async (event, filename) => {
 
 ipcMain.handle('list-remote-snapshots', async (event) => {
   try {
-    const serverUrl = process.env.SNAPSHOT_SERVER_URL;
-    const apiKey = process.env.SNAPSHOT_API_KEY;
+    const serverUrl = process.env.SNAPSHOT_SERVER_URL || DEFAULT_SNAPSHOT_SERVER_URL;
+    const apiKey = process.env.SNAPSHOT_API_KEY || DEFAULT_SNAPSHOT_API_KEY;
 
     if (!serverUrl || !apiKey) return [];
 
