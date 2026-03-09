@@ -123,7 +123,10 @@ function buildUI() {
           </div>
 
           <div class="snapshot-list-container">
-            <h2>Saved Snapshots</h2>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+              <h2 style="margin:0;">Saved Snapshots</h2>
+              <button id="wipeAllBtn" class="btn btn-danger" style="font-size:11px; padding:5px 10px;" title="Delete all snapshots">Wipe All</button>
+            </div>
             <div id="snapshotList" class="snapshot-list">
               <p class="loading">Loading snapshots...</p>
             </div>
@@ -346,6 +349,23 @@ newSnapshotBtn.addEventListener('click', () => {
   if (deleteBtn) deleteBtn.addEventListener('click', () => {
     if (currentSnapshot) {
       deleteSnapshot(currentSnapshot);
+    }
+  });
+
+  const wipeAllBtn = document.getElementById('wipeAllBtn');
+  if (wipeAllBtn) wipeAllBtn.addEventListener('click', async () => {
+    const count = allSnapshots.length;
+    if (count === 0) { alert('No snapshots to delete.'); return; }
+    if (!confirm(`Are you sure you want to permanently delete all ${count} snapshot(s)? This cannot be undone.`)) return;
+    const result = await ipcRenderer.invoke('wipe-all-snapshots');
+    if (result.success) {
+      currentSnapshot = null;
+      await loadSnapshotList();
+      emptyState.style.display = 'flex';
+      snapshotDetail.style.display = 'none';
+      alert(`✅ Deleted ${result.count} snapshot(s).`);
+    } else {
+      alert(`❌ Error: ${result.error}`);
     }
   });
 

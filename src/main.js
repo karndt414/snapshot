@@ -252,6 +252,26 @@ ipcMain.handle('delete-snapshot', async (event, filename) => {
   }
 });
 
+ipcMain.handle('wipe-all-snapshots', async () => {
+  try {
+    const snapshotDir = app.getPath('userData');
+    const files = fs.readdirSync(snapshotDir).filter(f => f.endsWith('.json'));
+    for (const file of files) {
+      fs.unlinkSync(path.join(snapshotDir, file));
+    }
+    return { success: true, count: files.length };
+  } catch (e) {
+    console.error("Error wiping snapshots:", e);
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('open-snapshot-folder', async () => {
+  const { shell } = require('electron');
+  const snapshotDir = app.getPath('userData');
+  shell.openPath(snapshotDir);
+});
+
 ipcMain.handle('compare-snapshots', async (event, baselineName, afterName) => {
   try {
     const baselinePath = path.join(app.getPath('userData'), `${baselineName}.json`);
