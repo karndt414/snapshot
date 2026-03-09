@@ -5,12 +5,28 @@ const crypto = require('crypto');
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const https = require('https');
 const http = require('http');
+const HARDCODED_SNAPSHOT_SERVER_URL = 'https://instasnapshot.vercel.app';
+const HARDCODED_SNAPSHOT_API_KEY = 'EVERLIJvivjSNFSVUFDshgognSGAGFOurgergAGBUeraogferogVbneRAOBO';
 
-// Load .env file from the project root
-require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+function resolveSnapshotServerUrl() {
+  const candidate = HARDCODED_SNAPSHOT_SERVER_URL;
+  const hasProtocol = /^https?:\/\//i.test(candidate);
+  const normalized = hasProtocol ? candidate : `https://${candidate}`;
 
-const DEFAULT_SNAPSHOT_SERVER_URL = 'http://localhost:3000';
-const DEFAULT_SNAPSHOT_API_KEY = 'sb_publishable_4cRWlmo693rt6aPU8Tmqjg_ZDnfLWJV';
+  try {
+    const parsed = new URL(normalized);
+    const hostname = parsed.hostname.toLowerCase();
+
+    // Enforce remote uploads only.
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+      return null;
+    }
+
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
 
 // Helper: make an HTTP/HTTPS request (no fetch in older Node)
 function makeRequest(url, options, body) {
@@ -254,26 +270,6 @@ ipcMain.handle('delete-snapshot', async (event, filename) => {
   }
 });
 
-ipcMain.handle('wipe-all-snapshots', async () => {
-  try {
-    const snapshotDir = app.getPath('userData');
-    const files = fs.readdirSync(snapshotDir).filter(f => f.endsWith('.json'));
-    for (const file of files) {
-      fs.unlinkSync(path.join(snapshotDir, file));
-    }
-    return { success: true, count: files.length };
-  } catch (e) {
-    console.error("Error wiping snapshots:", e);
-    return { success: false, error: e.message };
-  }
-});
-
-ipcMain.handle('open-snapshot-folder', async () => {
-  const { shell } = require('electron');
-  const snapshotDir = app.getPath('userData');
-  shell.openPath(snapshotDir);
-});
-
 ipcMain.handle('compare-snapshots', async (event, baselineName, afterName) => {
   try {
     const baselinePath = path.join(getSnapshotDir(), `${baselineName}.json`);
@@ -331,8 +327,6 @@ ipcMain.handle('compare-snapshots', async (event, baselineName, afterName) => {
 });
 
 ipcMain.handle('upload-snapshot', async (event, filename) => {
-  let snapshotId = null;
-
   const withStatus = (baseData, status, errorMessage = null) => {
     const safeBase = baseData && typeof baseData === 'object' ? baseData : {};
     const baseMetadata = safeBase.metadata && typeof safeBase.metadata === 'object'
@@ -366,23 +360,16 @@ ipcMain.handle('upload-snapshot', async (event, filename) => {
     return result;
   };
 
-  const updateSnapshotRow = async (serverUrl, apiKey, id, payload) => {
-    const body = JSON.stringify(payload);
-    const url = new URL(`/api/snapshots/${id}`, serverUrl);
-
-    return makeRequest(url.toString(), {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'Content-Length': Buffer.byteLength(body)
-      }
-    }, body);
-  };
-
   try {
-    const serverUrl = process.env.SNAPSHOT_SERVER_URL || DEFAULT_SNAPSHOT_SERVER_URL;
-    const apiKey = process.env.SNAPSHOT_API_KEY || DEFAULT_SNAPSHOT_API_KEY;
+    const serverUrl = resolveSnapshotServerUrl();
+    const apiKey = HARDCODED_SNAPSHOT_API_KEY;
+    if (!serverUrl) {
+      return {
+        success: false,
+        error: 'Hardcoded snapshot server URL is invalid or points to localhost.'
+      };
+    }
+
     const machineId = process.env.MACHINE_ID || require('os').hostname();
     const machineName = process.env.MACHINE_NAME || require('os').hostname();
 
@@ -390,24 +377,20 @@ ipcMain.handle('upload-snapshot', async (event, filename) => {
     const snapshotPath = path.join(getSnapshotDir(), `${filename}.json`);
     const data = JSON.parse(fs.readFileSync(snapshotPath, 'utf-8'));
 
-    const completedData = withStatus(data, 'Completed');
-
-    // Upload in a single POST with the full snapshot data
+    // Use a single POST upload so older deployed APIs that fail PATCH still work.
     const payload = {
       machine_id: machineId,
       machine_name: machineName,
       snapshot_name: filename,
-      data: completedData,
+      data: withStatus(data, 'Completed'),
     };
 
     const result = await createSnapshotRow(serverUrl, apiKey, payload);
-
     if (result.status === 200 || result.status === 201) {
-      snapshotId = result.body?.id;
-      return { success: true, id: snapshotId };
+      return { success: true, id: result.body?.id || null };
     }
 
-    return { success: false, error: result.body?.error || result.body?.message || `HTTP ${result.status}` };
+    return { success: false, error: result.body?.message || result.body?.error || `HTTP ${result.status}` };
   } catch (e) {
     console.error('Error uploading snapshot:', e);
     return { success: false, error: e.message };
@@ -416,8 +399,8 @@ ipcMain.handle('upload-snapshot', async (event, filename) => {
 
 ipcMain.handle('list-remote-snapshots', async (event) => {
   try {
-    const serverUrl = process.env.SNAPSHOT_SERVER_URL || DEFAULT_SNAPSHOT_SERVER_URL;
-    const apiKey = process.env.SNAPSHOT_API_KEY || DEFAULT_SNAPSHOT_API_KEY;
+    const serverUrl = resolveSnapshotServerUrl();
+    const apiKey = HARDCODED_SNAPSHOT_API_KEY;
 
     if (!serverUrl || !apiKey) return [];
 
