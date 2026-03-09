@@ -64,14 +64,28 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Only fetch lightweight metadata columns — never pull the full data blob
+  // Try lightweight query first; fall back to fetching data column if new columns don't exist
+  let rows: any[] = [];
+  let usedFallback = false;
+
   const { data, error } = await getSupabase()
     .from('snapshots')
     .select('id, machine_id, machine_name, snapshot_name, timestamp, snapshot_status, snapshot_size_bytes, snapshot_error')
     .order('timestamp', { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const fallback = await getSupabase()
+      .from('snapshots')
+      .select('id, machine_id, machine_name, snapshot_name, timestamp, data')
+      .order('timestamp', { ascending: false });
+
+    if (fallback.error) {
+      return NextResponse.json({ error: fallback.error.message }, { status: 500 });
+    }
+    rows = fallback.data || [];
+    usedFallback = true;
+  } else {
+    rows = data || [];
   }
 
   // Group snapshots by machine_id

@@ -56,7 +56,7 @@ function buildUI() {
   const htmlString = `
     <div class="container">
       <header>
-        <h1>System Snapshot Viewer</h1>
+        <h1> System Snapshot Viewer</h1>
         <p class="subtitle">View and manage system snapshots</p>
         <div class="header-row">
           <div>
@@ -129,7 +129,7 @@ function buildUI() {
         <div class="sidebar">
           <div class="snapshot-controls">
             <button id="newSnapshotBtn" class="btn btn-primary">
-              Take New Snapshot
+               Take New Snapshot
             </button>
             <input 
               type="text" 
