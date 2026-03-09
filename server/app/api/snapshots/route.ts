@@ -109,25 +109,7 @@ export async function POST(req: NextRequest) {
       snapshot_error: extractStatusError(data),
     });
 
-    if (err1) {
-      // Retry without the new columns in case they don't exist yet
-      const { data: result2, error: err2 } = await getSupabase()
-        .from('snapshots')
-        .insert({
-          machine_id,
-          machine_name: machine_name || machine_id,
-          snapshot_name,
-          timestamp: data.metadata?.timestamp || new Date().toISOString(),
-          data,
-        })
-        .select('id')
-        .single();
-
-      if (err2) throw err2;
-      inserted = result2;
-    } else {
-      inserted = result1;
-    }
+    if (error) throw error;
 
     return NextResponse.json({ success: true, id: inserted!.id });
   } catch (e: any) {
