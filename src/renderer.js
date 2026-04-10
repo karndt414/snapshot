@@ -235,6 +235,7 @@ function buildUI() {
                   <option value="">After snapshot...</option>
                 </select>
                 <button id="compareBtn" class="btn btn-primary">Save Delta</button>
+                <button id="pinBtn" class="btn btn-pin">📌 Pin</button>
                 <button id="uploadBtn" class="btn btn-upload">Upload</button>
                 <button id="deleteBtn" class="btn btn-danger">Delete</button>
               </div>
@@ -806,6 +807,80 @@ function initializeApp() {
       const selectedSnapshot = compareSelect.value;
       if (selectedSnapshot) {
         performComparison(currentSnapshot, selectedSnapshot);
+      }
+    });
+
+  if (snapshotsTabBtn)
+    snapshotsTabBtn.addEventListener("click", () => {
+      switchTab('snapshots');
+    });
+
+  if (deltasTabBtn)
+    deltasTabBtn.addEventListener("click", () => {
+      switchTab('deltas');
+    });
+
+  if (deltaCreateBtn)
+    deltaCreateBtn.addEventListener("click", async () => {
+      const beforeName = deltaBeforeSelect?.value;
+      const afterName = deltaAfterSelect?.value;
+
+      if (!beforeName || !afterName) {
+        alert('Please choose both a before and after snapshot.');
+        return;
+      }
+
+      if (beforeName === afterName) {
+        alert('Please choose two different snapshots.');
+        return;
+      }
+
+      await performComparison(beforeName, afterName);
+    });
+
+  if (trendPreset24hBtn)
+    trendPreset24hBtn.addEventListener('click', () => {
+      setTrendRange(24);
+    });
+
+  if (trendPreset7dBtn)
+    trendPreset7dBtn.addEventListener('click', () => {
+      setTrendRange(24 * 7);
+    });
+
+  if (trendGenerateBtn)
+    trendGenerateBtn.addEventListener('click', async () => {
+      const startValue = trendStartDate?.value;
+      const endValue = trendEndDate?.value;
+
+      if (!startValue || !endValue) {
+        alert('Please select both start and end date/time.');
+        return;
+      }
+
+      const startTs = new Date(startValue).getTime();
+      const endTs = new Date(endValue).getTime();
+
+      if (!Number.isFinite(startTs) || !Number.isFinite(endTs)) {
+        alert('Invalid date range.');
+        return;
+      }
+
+      if (startTs >= endTs) {
+        alert('Start date/time must be earlier than end date/time.');
+        return;
+      }
+
+      trendGenerateBtn.disabled = true;
+      trendGenerateBtn.textContent = 'Generating...';
+      try {
+        await generateTrendAnalytics(startTs, endTs);
+      } catch (e) {
+        console.error('Error generating trend analytics:', e);
+        alert(`Failed to generate trend analytics: ${e.message}`);
+      } finally {
+        trendGenerateBtn.disabled = false;
+        trendGenerateBtn.textContent = 'Generate Trend Graph';
       }
     });
 
@@ -1497,7 +1572,7 @@ async function takeNewSnapshot(name, tests = {}) {
     alert("Error taking snapshot. Check console for details.");
   } finally {
     newSnapshotBtn.disabled = false;
-    newSnapshotBtn.textContent = "Take Snapshot";
+    newSnapshotBtn.textContent = "Take New Snapshot";
   }
 }
 

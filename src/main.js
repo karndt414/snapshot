@@ -1099,6 +1099,22 @@ ipcMain.handle('delete-snapshot', async (event, filename) => {
   }
 });
 
+ipcMain.handle('wipe-all-snapshots', async () => {
+  try {
+    const snapshotDir = getSnapshotDir();
+    const files = fs.readdirSync(snapshotDir).filter((f) => f.endsWith('.json') && f !== '_snapshot_settings.json');
+
+    files.forEach((file) => {
+      fs.unlinkSync(path.join(snapshotDir, file));
+    });
+
+    return { success: true, count: files.length };
+  } catch (e) {
+    console.error('Error wiping snapshots:', e);
+    return { success: false, error: e.message || 'Failed to wipe snapshots' };
+  }
+});
+
 ipcMain.handle('file-search-check', async (event, criteria) => {
   try {
     return await checkFileSearchCriteria(criteria || {});
@@ -1179,6 +1195,9 @@ ipcMain.handle('delete-delta', async (event, deltaName) => {
   } catch (e) {
     console.error('Error deleting delta:', e);
     return false;
+  }
+});
+
 ipcMain.handle('generate-comparison-report', async (event, baselineName, afterName) => {
   try {
     return await exportComparisonReport(baselineName, afterName);
